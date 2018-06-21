@@ -1,0 +1,120 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Trabalho 02",
+  "Parameters": {
+    "KeyName": {
+      "Description": "Nome do par de chaves",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Default": "computacaoemnuvem"
+    },
+    "VPC": {
+      "Description": "O VPC a ser utilizado",
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "Subnet": {
+      "Description": "Subrede a ser utilizada",
+      "Type": "AWS::EC2::Subnet::Id"
+    }
+  },
+  "Resources": {
+    "SecurityGroupServidorBastion": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Servidor Bastion",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [{
+          "CidrIp": "0.0.0.0/0",
+          "FromPort": 22,
+          "IpProtocol": "tcp",
+          "ToPort": 22
+        }]
+      }
+    },
+
+    "SecurityGroupServidorWeb": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Grupo de Seguranca Servidor Web",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "CidrIp": "0.0.0.0/0",
+            "FromPort": "80",
+            "ToPort": "80"
+          },{
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "SourceSecurityGroupId": {"Ref": "SecurityGroupServidorBastion"}
+          }
+        ]
+      }
+    },
+
+    "SecurityGroupBancoDeDados": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "ufcqx-db-sg",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [{
+          "IpProtocol": "tcp",
+          "FromPort": "3306",
+          "ToPort": "3306",
+          "SourceSecurityGroupId": {"Ref": "SecurityGroupServidorWeb"}
+        }]
+      }
+    },
+
+
+    "ServidorBastion": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": "ami-a4dc46db",
+        "InstanceType": "t2.micro",
+        "KeyName": {"Ref": "KeyName"},
+        "SecurityGroupIds": [{"Ref": "SecurityGroupServidorBastion"}],
+        "SubnetId": {"Ref": "Subnet"}
+      }
+    },
+    "ServidorWeb": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": "ami-a4dc46db",
+        "InstanceType": "t2.micro",
+        "KeyName": {"Ref": "KeyName"},
+        "SecurityGroupIds": [{"Ref": "SecurityGroupServidorWeb"}],
+        "SubnetId": {"Ref": "Subnet"}
+      }
+    },
+
+    "ServidorBancoDeDados": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AllocatedStorage": "5",
+        "DBInstanceClass": "db.t2.micro",
+        "DBInstanceIdentifier": "ufcqx-db",
+        "DBName": "s3",
+        "Engine": "MySQL",
+        "MasterUsername": "root",
+        "MasterUserPassword": "12345678",
+        "VPCSecurityGroups": [{"Fn::GetAtt": ["SecurityGroupBancoDeDados", "GroupId"]}],
+        "PreferredMaintenanceWindow": "Sun:06:00-Sun:07:00",
+        "BackupRetentionPeriod": "3",
+        "PreferredBackupWindow": "05:00-06:00"
+      }
+    }
+
+  },
+  "Outputs": {
+    "ServerWeb": {
+      "Value": {"Fn::GetAtt": ["ServidorWeb", "PublicDnsName"]},
+      "Description": "IP Publico para conexao via HTTP"
+    },
+    "ServerBastion": {
+      "Value": {"Fn::GetAtt": ["ServidorBastion", "PublicDnsName"]},
+      "Description": "IP Publico para conexao via SSH usuario ubuntu"
+    }
+  }
+}
